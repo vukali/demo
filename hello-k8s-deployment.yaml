@@ -17,7 +17,7 @@ spec:
         - name: hello-k8s
           image: vudong/k8s:1.0  # Image đã được push lên Docker Hub
           ports:
-            - containerPort: 9800  # Đã thay đổi từ 5000 sang 9800
+            - containerPort: 5000  # Đã thay đổi từ 5000 sang 9800
 ---
 apiVersion: v1
 kind: Service
@@ -26,7 +26,7 @@ metadata:
   namespace: default
 spec:
   ports:
-    - port: 9800    # Đã thay đổi từ 80 sang 9800
-      targetPort: 9800  # Đã thay đổi từ 5000 sang 9800
+    - port: 5000    # Đã thay đổi từ 80 sang 9800
+      targetPort: 5000  # Đã thay đổi từ 5000 sang 9800
   selector:
     app: hello-k8s
