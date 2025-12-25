@@ -10,22 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Check out the repository
+    # Kiểm tra mã nguồn từ repository
     - name: Checkout code
       uses: actions/checkout@v2
 
-    # Set up Docker Buildx
+    # Cài đặt Docker Buildx
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    # Login to Docker Hub
+    # Đăng nhập vào Docker Hub
     - name: Log in to Docker Hub
       uses: docker/login-action@v2
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # Build and push the Docker image
+    # Build và push Docker image
     - name: Build and push Docker image
       uses: docker/build-push-action@v3
       with:
