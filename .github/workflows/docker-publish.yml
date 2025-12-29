@@ -8,28 +8,61 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    # Kiểm tra mã nguồn từ repository
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    # Cài đặt Docker Buildx
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
 
-    # Đăng nhập vào Docker Hub
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # Build và push Docker image
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v3
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        tags: vudong/k8s:1.1
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            vudong/k8s:${{ github.sha }}
+            vudong/k8s:latest
+
+# name: Docker Build and Push
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     # Kiểm tra mã nguồn từ repository
+#     - name: Checkout code
+#       uses: actions/checkout@v2
+
+#     # Cài đặt Docker Buildx
+#     - name: Set up Docker Buildx
+#       uses: docker/setup-buildx-action@v2
+
+#     # Đăng nhập vào Docker Hub
+#     - name: Log in to Docker Hub
+#       uses: docker/login-action@v2
+#       with:
+#         username: ${{ secrets.DOCKERHUB_USERNAME }}
+#         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#     # Build và push Docker image
+#     - name: Build and push Docker image
+#       uses: docker/build-push-action@v3
+#       with:
+#         context: .
+#         file: ./Dockerfile
+#         push: true
+#         tags: vudong/k8s:1.1
