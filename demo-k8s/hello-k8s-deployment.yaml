@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-k8s
-          image: vudong/k8s:${GITHUB_SHA}
+          image: vudong/k8s:latest
           ports:
             - containerPort: 5000
 ---
