@@ -24,9 +24,11 @@ kind: Service
 metadata:
   name: hello-k8s
   namespace: demo-01
+spec:
+  selector:
+    app: hello-k8s
   ports:
     - port: 5000
       targetPort: 5000
-  selector:
-    app: hello-k8s
+      protocol: TCP
   type: LoadBalancer
