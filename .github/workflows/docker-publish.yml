@@ -65,4 +65,4 @@ jobs:
         context: .
         file: ./Dockerfile
         push: true
-        tags: vudong/k8s:1.2
+        tags: vudong/k8s:1.3

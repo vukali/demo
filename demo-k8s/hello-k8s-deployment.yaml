@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-k8s
-          image: vudong/k8s:1.2
+          image: vudong/k8s:1.3
           ports:
             - containerPort: 5000
 ---
