@@ -3,6 +3,11 @@ name: Docker Build and Push to Harbor
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "hello-k8s-deployment.yaml"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,6 +16,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set vars
+        id: vars
+        run: |
+          echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -29,8 +39,25 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            harbor.watasoftware.com/demo/hello-k8s:1.3
-            harbor.watasoftware.com/demo/hello-k8s:latest
+            ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:${{ steps.vars.outputs.SHA_SHORT }}
+            ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:latest
+
+      - name: Update manifest image tag
+        run: |
+          REG="${{ secrets.HARBOR_REGISTRY }}"
+          TAG="${{ steps.vars.outputs.SHA_SHORT }}"
+          # replace đúng 1 dòng image:
+          sed -i "s|image: .*demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" hello-k8s-deployment.yaml
+          grep -n "image:" hello-k8s-deployment.yaml
+
+      - name: Commit & push manifest for ArgoCD
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add hello-k8s-deployment.yaml
+          git commit -m "chore(gitops): deploy hello-k8s ${{ steps.vars.outputs.SHA_SHORT }}" || echo "No changes to commit"
+          git push
 
 # name: Docker Build and Push
 

@@ -15,7 +15,8 @@ spec:
     spec:
       containers:
         - name: hello-k8s
-          image: vudong/k8s:1.3
+          image: harbor.watasoftware.com/demo/hello-k8s:fb0ed8a
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
 ---
