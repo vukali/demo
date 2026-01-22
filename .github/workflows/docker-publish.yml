@@ -2,32 +2,32 @@ name: Docker Build and Push to Harbor
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set vars
+      - name: Set short SHA
         id: vars
         run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Harbor
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.HARBOR_REGISTRY }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
+          registry: ${{ secrets.HARBOR_REGISTRY }}   # ví dụ: harbor.watasoftware.com
+          username: ${{ secrets.HARBOR_USERNAME }}   # robot$...
+          password: ${{ secrets.HARBOR_PASSWORD }}   # secret robot
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -44,18 +44,15 @@ jobs:
           FILE="demo-k8s/hello-k8s-deployment.yaml"
           REG="${{ secrets.HARBOR_REGISTRY }}"
           TAG="${{ steps.vars.outputs.SHA_SHORT }}"
-
-          # replace đúng dòng image:
           sed -i "s|image: ${REG}/demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" "$FILE"
-          echo "=== Current image line ==="
           grep -n "image:" "$FILE"
 
       - name: Commit & push manifest for ArgoCD
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add demo-k8s/hello-k8s-deployment.yaml
-          git commit -m "chore: bump hello-k8s image to ${{ steps.vars.outputs.SHA_SHORT }}" || echo "No changes"
+          git commit -m "chore: bump hello-k8s image to ${{ steps.vars.outputs.SHA_SHORT }}" || exit 0
           git push
 
 # name: Docker Build and Push
