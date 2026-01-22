@@ -25,9 +25,9 @@ jobs:
       - name: Log in to Harbor
         uses: docker/login-action@v3
         with:
-          registry: ${{ secrets.HARBOR_REGISTRY }}   # ví dụ: harbor.watasoftware.com
-          username: ${{ secrets.HARBOR_USERNAME }}   # robot$...
-          password: ${{ secrets.HARBOR_PASSWORD }}   # secret robot
+          registry: ${{ secrets.HARBOR_REGISTRY }}
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
