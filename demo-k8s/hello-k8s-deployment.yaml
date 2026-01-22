@@ -4,7 +4,7 @@ metadata:
   name: hello-k8s
   namespace: demo-01
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: hello-k8s
