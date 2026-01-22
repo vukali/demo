@@ -3,27 +3,24 @@ name: Docker Build and Push to Harbor
 on:
   push:
     branches: [ "main" ]
-    paths-ignore:
-      - "hello-k8s-deployment.yaml"
-
-permissions:
-  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set vars
-        id: vars
-        run: |
-          echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Set vars
+        id: vars
+        run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Log in to Harbor
         uses: docker/login-action@v3
@@ -44,19 +41,21 @@ jobs:
 
       - name: Update manifest image tag
         run: |
+          FILE="demo-k8s/hello-k8s-deployment.yaml"
           REG="${{ secrets.HARBOR_REGISTRY }}"
           TAG="${{ steps.vars.outputs.SHA_SHORT }}"
-          # replace đúng 1 dòng image:
-          sed -i "s|image: .*demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" hello-k8s-deployment.yaml
-          grep -n "image:" hello-k8s-deployment.yaml
+
+          # replace đúng dòng image:
+          sed -i "s|image: ${REG}/demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" "$FILE"
+          echo "=== Current image line ==="
+          grep -n "image:" "$FILE"
 
       - name: Commit & push manifest for ArgoCD
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add hello-k8s-deployment.yaml
-          git commit -m "chore(gitops): deploy hello-k8s ${{ steps.vars.outputs.SHA_SHORT }}" || echo "No changes to commit"
+          git add demo-k8s/hello-k8s-deployment.yaml
+          git commit -m "chore: bump hello-k8s image to ${{ steps.vars.outputs.SHA_SHORT }}" || echo "No changes"
           git push
 
 # name: Docker Build and Push
