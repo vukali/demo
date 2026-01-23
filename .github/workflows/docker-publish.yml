@@ -29,7 +29,6 @@ jobs:
           registry: ${{ env.HARBOR_REGISTRY }}
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
-          port: ${{ secrets.SWARM_PORT }}
 
       - name: Build & Push image
         uses: docker/build-push-action@v6
@@ -52,6 +51,7 @@ jobs:
           host: ${{ secrets.SWARM_HOST }}
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SWARM_SSH_KEY }}
+          port: ${{ secrets.SWARM_PORT }}
           script: |
             set -e
 
