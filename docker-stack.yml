@@ -5,8 +5,14 @@ services:
     image: ${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${IMAGE_NAME}:${IMAGE_TAG}
     ports:
       - "8088:5000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 10s
     deploy:
-      replicas: 2
+      replicas: 3
       update_config:
         order: start-first
         parallelism: 1
