@@ -4,7 +4,7 @@ name: Build & Deploy to Docker Swarm
 
 on:
   push:
-    branches: [ "swarm-deploy" ]
+    branches: ["swarm-deploy"]
 
 env:
   HARBOR_REGISTRY: ${{ secrets.HARBOR_REGISTRY }}
@@ -63,12 +63,17 @@ jobs:
           key: ${{ secrets.SWARM_SSH_KEY }}
           port: ${{ secrets.SWARM_PORT }}
           script: |
-            set -e
+            set -euo pipefail
 
-            echo "${{ secrets.HARBOR_PASSWORD }}" | docker login "${{ secrets.HARBOR_REGISTRY }}" \
-             -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+            REG='${{ secrets.HARBOR_REGISTRY }}'
+            USER='${{ secrets.HARBOR_USERNAME }}'
+            PASS='${{ secrets.HARBOR_PASSWORD }}'
 
-            export IMAGE_TAG="${{ needs.build_and_push.outputs.image_tag }}"
+            # Robot username contains '$' (e.g., robot$gha-hello-k8s) -> must NOT be expanded by bash
+            printf '%s' "$PASS" | docker login "$REG" -u "$USER" --password-stdin
+
+            export IMAGE_TAG='${{ needs.build_and_push.outputs.image_tag }}'
+
             docker stack deploy -c /home/${{ secrets.SWARM_USER }}/docker-stack.yml demo --with-registry-auth
 
             docker stack services demo
