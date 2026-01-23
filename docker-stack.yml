@@ -12,7 +12,10 @@ services:
       retries: 5
       start_period: 10s
     deploy:
-      replicas: 3
+      replicas: 5
+      placement:
+        preferences:
+          - spread: node.hostname
       update_config:
         order: start-first
         parallelism: 1
