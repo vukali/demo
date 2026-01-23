@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  demo:
+    image: ${HARBOR_REGISTRY}/demo/hello-k8s:${IMAGE_TAG}
+    ports:
+      - "8088:5000"
+    deploy:
+      replicas: 2
+      update_config:
+        order: start-first
+        parallelism: 1
+        delay: 5s
+      restart_policy:
+        condition: on-failure
