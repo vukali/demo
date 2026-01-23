@@ -45,6 +45,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Copy docker-stack.yml to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          port: ${{ secrets.SWARM_PORT }}
+          source: "docker-stack.yml"
+          target: "/home/${{ secrets.SWARM_USER }}/"
+
       - name: Deploy to Swarm Leader via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -55,14 +65,11 @@ jobs:
           script: |
             set -e
 
-            export HARBOR_REGISTRY="${{ secrets.HARBOR_REGISTRY }}"
+            echo "${{ secrets.HARBOR_PASSWORD }}" | docker login "${{ secrets.HARBOR_REGISTRY }}" \
+             -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
             export IMAGE_TAG="${{ needs.build_and_push.outputs.image_tag }}"
-
-            echo "${{ secrets.HARBOR_PASSWORD }}" | docker login "${{ secrets.HARBOR_REGISTRY }}" -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
-
-            # Deploy/update stack (stack name: demo)
-            cd /home/${{ secrets.SWARM_USER }}
-            docker stack deploy -c demo/docker-stack.yml demo --with-registry-auth
+            docker stack deploy -c /home/${{ secrets.SWARM_USER }}/docker-stack.yml demo --with-registry-auth
 
             docker stack services demo
             docker service ps demo_demo --no-trunc || true
