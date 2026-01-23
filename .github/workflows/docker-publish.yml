@@ -72,6 +72,7 @@ jobs:
             # Robot username contains '$' (e.g., robot$gha-hello-k8s) -> must NOT be expanded by bash
             printf '%s' "$PASS" | docker login "$REG" -u "$USER" --password-stdin
 
+            export HARBOR_REGISTRY="$REG"
             export IMAGE_TAG='${{ needs.build_and_push.outputs.image_tag }}'
 
             docker stack deploy -c /home/${{ secrets.SWARM_USER }}/docker-stack.yml demo --with-registry-auth
