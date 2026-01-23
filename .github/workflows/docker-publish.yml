@@ -79,6 +79,28 @@ jobs:
 
             docker stack deploy -c /home/${{ secrets.SWARM_USER }}/docker-stack.yml demo --with-registry-auth
 
+            sleep 5
+
+            FAIL=0
+            for i in $(seq 1 20); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://127.0.0.1:8088 || echo "ERR")
+              echo "Smoke[$i] => $code"
+              if [ "$code" != "200" ]; then
+                FAIL=1
+                break
+              fi
+              sleep 0.5
+            done
+
+            if [ "$FAIL" -eq 1 ]; then
+              echo "Smoke test failed. Rolling back..."
+              docker service inspect demo_demo >/dev/null 2>&1 && docker service rollback demo_demo || true
+              docker service ps demo_demo --no-trunc || true
+              exit 1
+            fi
+
+            echo "Deploy OK."
+
             docker stack services demo
             docker service ps demo_demo --no-trunc || true
 
