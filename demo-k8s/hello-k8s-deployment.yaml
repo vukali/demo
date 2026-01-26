@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hello-k8s
-          image: harbor.watasoftware.com/demo/hello-k8s:f2b7ac4
+          image: harbor.watasoftware.com/demo/hello-k8s:init
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
@@ -43,14 +43,13 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-  - host: hello.demo.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: hello-k8s
-            port:
-              number: 5000
-
+    - host: hello.demo.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello-k8s
+                port:
+                  number: 5000

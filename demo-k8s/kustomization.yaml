@@ -4,3 +4,7 @@ namespace: demo-01
 
 resources:
 - hello-k8s-deployment.yaml
+
+images:
+  - name: harbor.watasoftware.com/demo/hello-k8s
+    newTag: f2b7ac4

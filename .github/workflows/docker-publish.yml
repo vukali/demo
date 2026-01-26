@@ -1,59 +1,95 @@
-name: Docker Build and Push to Harbor
+name: CI - Python Lint/Test
 
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set short SHA
-        id: vars
-        run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Harbor
-        uses: docker/login-action@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          registry: ${{ secrets.HARBOR_REGISTRY }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
+          python-version: "3.8"
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:${{ steps.vars.outputs.SHA_SHORT }}
-            ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:latest
-
-      - name: Update manifest image tag
+      - name: Install deps
         run: |
-          FILE="demo-k8s/hello-k8s-deployment.yaml"
-          REG="${{ secrets.HARBOR_REGISTRY }}"
-          TAG="${{ steps.vars.outputs.SHA_SHORT }}"
-          sed -i "s|image: ${REG}/demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" "$FILE"
-          grep -n "image:" "$FILE"
+          python -m pip install --upgrade pip
+          pip install flask werkzeug flake8
 
-      - name: Commit & push manifest for ArgoCD
+      - name: Lint
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add demo-k8s/hello-k8s-deployment.yaml
-          git commit -m "chore: bump hello-k8s image to ${{ steps.vars.outputs.SHA_SHORT }}" || exit 0
-          git push
+          flake8 . || true
+
+      - name: Smoke test (import/run syntax)
+        run: |
+          python -m py_compile hello-k8s.py
+
+# name: Docker Build and Push to Harbor
+
+# on:
+#   push:
+#     branches: ["main"]
+
+# permissions:
+#   contents: write
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+
+#       - name: Set short SHA
+#         id: vars
+#         run: echo "SHA_SHORT=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+
+#       - name: Log in to Harbor
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ${{ secrets.HARBOR_REGISTRY }}
+#           username: ${{ secrets.HARBOR_USERNAME }}
+#           password: ${{ secrets.HARBOR_PASSWORD }}
+
+#       - name: Build and push
+#         uses: docker/build-push-action@v6
+#         with:
+#           context: .
+#           file: ./Dockerfile
+#           push: true
+#           tags: |
+#             ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:${{ steps.vars.outputs.SHA_SHORT }}
+#             ${{ secrets.HARBOR_REGISTRY }}/demo/hello-k8s:latest
+
+#       - name: Update manifest image tag
+#         run: |
+#           FILE="demo-k8s/hello-k8s-deployment.yaml"
+#           REG="${{ secrets.HARBOR_REGISTRY }}"
+#           TAG="${{ steps.vars.outputs.SHA_SHORT }}"
+#           sed -i "s|image: ${REG}/demo/hello-k8s:.*|image: ${REG}/demo/hello-k8s:${TAG}|g" "$FILE"
+#           grep -n "image:" "$FILE"
+
+#       - name: Commit & push manifest for ArgoCD
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "github-actions[bot]@users.noreply.github.com"
+#           git add demo-k8s/hello-k8s-deployment.yaml
+#           git commit -m "chore: bump hello-k8s image to ${{ steps.vars.outputs.SHA_SHORT }}" || exit 0
+#           git push
 
 # name: Docker Build and Push
 
