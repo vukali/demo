@@ -27,29 +27,52 @@ spec:
   environment {
     DOCKER_CONTEXT = "."
     DOCKERFILE     = "Dockerfile"
-
     KUSTOM_FILE    = "demo-k8s/kustomization.yaml"
 
     HARBOR_HOST    = "harbor.watasoftware.com"
     HARBOR_PROJECT = "demo"
     IMAGE_NAME     = "hello-k8s"
     IMAGE_REPO     = "${HARBOR_HOST}/${HARBOR_PROJECT}/${IMAGE_NAME}"
+
+    // marker để tránh loop
+    SKIP_MARKER    = "[skip-jenkins]"
+    BOT_EMAIL      = "jenkins@local"
   }
 
-  options {
-    disableConcurrentBuilds()
-    // BỎ timestamps() vì Jenkins bạn không support option này
-  }
+  options { disableConcurrentBuilds() }
 
   stages {
     stage("Checkout") {
       steps { checkout scm }
     }
 
+    stage("Anti-loop (skip bot commit)") {
+      steps {
+        container('tools') {
+          sh '''
+            set -eu
+            apk add --no-cache git >/dev/null
+            AUTHOR_EMAIL=$(git log -1 --pretty=format:%ae || true)
+            MSG=$(git log -1 --pretty=format:%s || true)
+
+            echo "Last commit author: $AUTHOR_EMAIL"
+            echo "Last commit msg   : $MSG"
+
+            if [ "$AUTHOR_EMAIL" = "${BOT_EMAIL}" ]; then
+              echo "This is bot commit (${BOT_EMAIL}) -> skip build."
+              exit 100
+            fi
+            echo "$MSG" | grep -q "${SKIP_MARKER}" && { echo "Found ${SKIP_MARKER} -> skip build."; exit 100; } || true
+          '''
+        }
+      }
+    }
+
     stage("Set Image Tag") {
       steps {
         script {
-          env.IMAGE_TAG = (env.GIT_COMMIT?.take(7) ?: env.BUILD_NUMBER)
+          def sha = env.GIT_COMMIT ?: ""
+          env.IMAGE_TAG = (sha.length() >= 7) ? sha.substring(0,7) : env.BUILD_NUMBER
           echo "IMAGE_TAG=${env.IMAGE_TAG}"
         }
       }
@@ -63,12 +86,9 @@ spec:
                                             passwordVariable: 'HARBOR_PASS')]) {
             sh '''
               set -eu
-
               cat > /kaniko/.docker/config.json <<EOF
               { "auths": { "${HARBOR_HOST}": { "username": "${HARBOR_USER}", "password": "${HARBOR_PASS}" } } }
 EOF
-
-              echo "Building ${IMAGE_REPO}:${IMAGE_TAG} and :latest"
               /kaniko/executor \
                 --context "${WORKSPACE}/${DOCKER_CONTEXT}" \
                 --dockerfile "${WORKSPACE}/${DOCKERFILE}" \
@@ -80,31 +100,32 @@ EOF
       }
     }
 
-    stage("Bump kustomize tag & push Git (for ArgoCD)") {
+    stage("Bump image tag in kustomization.yaml & push Git") {
       steps {
         container('tools') {
-          withCredentials([usernamePassword(credentialsId: 'github-pat',
-                                            usernameVariable: 'GH_USER',
-                                            passwordVariable: 'GH_TOKEN')]) {
+          withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
             sh '''
               set -eu
-              apk add --no-cache git yq
+              apk add --no-cache git yq >/dev/null
 
-              git config user.email "jenkins@local"
+              git config user.email "${BOT_EMAIL}"
               git config user.name  "jenkins"
 
-              # Jenkins checkout thường ở detached HEAD -> đảm bảo có branch main local để commit
-              git fetch origin main
-              git checkout -B main origin/main
+              ORIGIN_URL=$(git remote get-url origin)
+              case "$ORIGIN_URL" in
+                https://*)
+                  git remote set-url origin "https://${GITHUB_TOKEN}@${ORIGIN_URL#https://}"
+                  ;;
+              esac
 
               FILE="${KUSTOM_FILE}"
 
-              # đảm bảo có images array
+              # ensure .images exists
               if ! yq '.images' "$FILE" >/dev/null 2>&1; then
                 yq -i '.images = []' "$FILE"
               fi
 
-              # update đúng image repo
+              # add/update images entry
               if ! yq -e '.images[] | select(.name=="'"${IMAGE_REPO}"'")' "$FILE" >/dev/null 2>&1; then
                 yq -i '.images += [{"name":"'"${IMAGE_REPO}"'","newTag":"'"${IMAGE_TAG}"'"}]' "$FILE"
               else
@@ -112,10 +133,8 @@ EOF
               fi
 
               git add "$FILE"
-              git commit -m "chore(hello-k8s): bump image tag to ${IMAGE_TAG} [skip jenkins]" || true
-
-              # push dùng PAT: format https://user:token@...
-              git push "https://${GH_USER}:${GH_TOKEN}@github.com/vukali/demo.git" HEAD:main
+              git commit -m "chore(hello-k8s): bump image tag to ${IMAGE_TAG} ${SKIP_MARKER}" || true
+              git push origin HEAD:main
             '''
           }
         }
@@ -125,7 +144,7 @@ EOF
 
   post {
     success {
-      echo "DONE: pushed ${IMAGE_REPO}:${IMAGE_TAG} + updated ${KUSTOM_FILE}. ArgoCD autosync sẽ rollout."
+      echo "OK: pushed ${IMAGE_REPO}:${IMAGE_TAG} + updated ${KUSTOM_FILE}. ArgoCD autosync sẽ rollout."
     }
   }
 }
