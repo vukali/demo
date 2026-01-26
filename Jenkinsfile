@@ -25,30 +25,34 @@ spec:
   }
 
   environment {
-    // Repo structure của bạn
-    DOCKER_CONTEXT = "."                // repo root
-    DOCKERFILE     = "Dockerfile"       // repo root
-    K8S_DIR        = "demo-k8s"
+    DOCKER_CONTEXT = "."
+    DOCKERFILE     = "Dockerfile"
+
     KUSTOM_FILE    = "demo-k8s/kustomization.yaml"
 
-    // Harbor
     HARBOR_HOST    = "harbor.watasoftware.com"
     HARBOR_PROJECT = "demo"
     IMAGE_NAME     = "hello-k8s"
     IMAGE_REPO     = "${HARBOR_HOST}/${HARBOR_PROJECT}/${IMAGE_NAME}"
-
-    // Tag theo commit short SHA
-    IMAGE_TAG      = "${env.GIT_COMMIT?.take(7) ?: env.BUILD_NUMBER}"
   }
 
   options {
-    timestamps()
     disableConcurrentBuilds()
+    // BỎ timestamps() vì Jenkins bạn không support option này
   }
 
   stages {
     stage("Checkout") {
       steps { checkout scm }
+    }
+
+    stage("Set Image Tag") {
+      steps {
+        script {
+          env.IMAGE_TAG = (env.GIT_COMMIT?.take(7) ?: env.BUILD_NUMBER)
+          echo "IMAGE_TAG=${env.IMAGE_TAG}"
+        }
+      }
     }
 
     stage("Build & Push to Harbor (Kaniko)") {
@@ -58,46 +62,49 @@ spec:
                                             usernameVariable: 'HARBOR_USER',
                                             passwordVariable: 'HARBOR_PASS')]) {
             sh '''
-              set -eux
+              set -eu
+
               cat > /kaniko/.docker/config.json <<EOF
               { "auths": { "${HARBOR_HOST}": { "username": "${HARBOR_USER}", "password": "${HARBOR_PASS}" } } }
 EOF
 
-              echo "Building ${IMAGE_REPO}:${IMAGE_TAG}"
+              echo "Building ${IMAGE_REPO}:${IMAGE_TAG} and :latest"
               /kaniko/executor \
                 --context "${WORKSPACE}/${DOCKER_CONTEXT}" \
                 --dockerfile "${WORKSPACE}/${DOCKERFILE}" \
-                --destination "${IMAGE_REPO}:${IMAGE_TAG}"
+                --destination "${IMAGE_REPO}:${IMAGE_TAG}" \
+                --destination "${IMAGE_REPO}:latest"
             '''
           }
         }
       }
     }
 
-    stage("Bump image tag in kustomization.yaml & push Git") {
+    stage("Bump kustomize tag & push Git (for ArgoCD)") {
       steps {
         container('tools') {
-          withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+          withCredentials([usernamePassword(credentialsId: 'github-pat',
+                                            usernameVariable: 'GH_USER',
+                                            passwordVariable: 'GH_TOKEN')]) {
             sh '''
-              set -eux
+              set -eu
               apk add --no-cache git yq
 
               git config user.email "jenkins@local"
               git config user.name  "jenkins"
 
-              ORIGIN_URL=$(git remote get-url origin)
-              if echo "$ORIGIN_URL" | grep -q "^https://"; then
-                git remote set-url origin "https://${GITHUB_TOKEN}@${ORIGIN_URL#https://}"
-              fi
+              # Jenkins checkout thường ở detached HEAD -> đảm bảo có branch main local để commit
+              git fetch origin main
+              git checkout -B main origin/main
 
               FILE="${KUSTOM_FILE}"
 
-              # đảm bảo có images: []
+              # đảm bảo có images array
               if ! yq '.images' "$FILE" >/dev/null 2>&1; then
                 yq -i '.images = []' "$FILE"
               fi
 
-              # add/update entry đúng image repo
+              # update đúng image repo
               if ! yq -e '.images[] | select(.name=="'"${IMAGE_REPO}"'")' "$FILE" >/dev/null 2>&1; then
                 yq -i '.images += [{"name":"'"${IMAGE_REPO}"'","newTag":"'"${IMAGE_TAG}"'"}]' "$FILE"
               else
@@ -105,8 +112,10 @@ EOF
               fi
 
               git add "$FILE"
-              git commit -m "chore(hello-k8s): bump image tag to ${IMAGE_TAG}" || true
-              git push origin HEAD:main
+              git commit -m "chore(hello-k8s): bump image tag to ${IMAGE_TAG} [skip jenkins]" || true
+
+              # push dùng PAT: format https://user:token@...
+              git push "https://${GH_USER}:${GH_TOKEN}@github.com/vukali/demo.git" HEAD:main
             '''
           }
         }
@@ -116,7 +125,7 @@ EOF
 
   post {
     success {
-      echo "OK: pushed ${IMAGE_REPO}:${IMAGE_TAG} + updated ${KUSTOM_FILE}. ArgoCD autosync sẽ rollout."
+      echo "DONE: pushed ${IMAGE_REPO}:${IMAGE_TAG} + updated ${KUSTOM_FILE}. ArgoCD autosync sẽ rollout."
     }
   }
 }
