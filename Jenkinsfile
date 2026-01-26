@@ -8,7 +8,7 @@ spec:
   containers:
   - name: kaniko
     image: gcr.io/kaniko-project/executor:debug
-    command: ["/busybox","cat"]
+    command: ["/busybox/busybox", "cat"]
     tty: true
     volumeMounts:
     - name: docker-config
