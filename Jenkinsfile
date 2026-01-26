@@ -7,8 +7,8 @@ kind: Pod
 spec:
   containers:
   - name: kaniko
-    image: gcr.io/kaniko-project/executor:latest
-    command: ["/busybox/cat"]
+    image: gcr.io/kaniko-project/executor:debug
+    command: ["/busybox","cat"]
     tty: true
     volumeMounts:
     - name: docker-config
@@ -37,6 +37,7 @@ spec:
     // marker để tránh loop
     SKIP_MARKER    = "[skip-jenkins]"
     BOT_EMAIL      = "jenkins@local"
+    SKIP_BUILD     = "false"
   }
 
   options { disableConcurrentBuilds() }
@@ -49,26 +50,26 @@ spec:
     stage("Anti-loop (skip bot commit)") {
       steps {
         container('tools') {
-          sh '''
-            set -eu
-            apk add --no-cache git >/dev/null
-            AUTHOR_EMAIL=$(git log -1 --pretty=format:%ae || true)
-            MSG=$(git log -1 --pretty=format:%s || true)
+          script {
+            sh 'apk add --no-cache git >/dev/null'
 
-            echo "Last commit author: $AUTHOR_EMAIL"
-            echo "Last commit msg   : $MSG"
+            def authorEmail = sh(returnStdout: true, script: 'git log -1 --pretty=format:%ae || true').trim()
+            def msg         = sh(returnStdout: true, script: 'git log -1 --pretty=format:%s  || true').trim()
 
-            if [ "$AUTHOR_EMAIL" = "${BOT_EMAIL}" ]; then
-              echo "This is bot commit (${BOT_EMAIL}) -> skip build."
-              exit 100
-            fi
-            echo "$MSG" | grep -q "${SKIP_MARKER}" && { echo "Found ${SKIP_MARKER} -> skip build."; exit 100; } || true
-          '''
+            echo "Last commit author: ${authorEmail}"
+            echo "Last commit msg   : ${msg}"
+
+            if (authorEmail == env.BOT_EMAIL || msg.contains(env.SKIP_MARKER)) {
+              env.SKIP_BUILD = "true"
+              echo "Skip build: detected bot commit or ${env.SKIP_MARKER}"
+            }
+          }
         }
       }
     }
 
     stage("Set Image Tag") {
+      when { expression { return env.SKIP_BUILD != "true" } }
       steps {
         script {
           def sha = env.GIT_COMMIT ?: ""
@@ -79,6 +80,7 @@ spec:
     }
 
     stage("Build & Push to Harbor (Kaniko)") {
+      when { expression { return env.SKIP_BUILD != "true" } }
       steps {
         container('kaniko') {
           withCredentials([usernamePassword(credentialsId: 'harbor-cred',
@@ -101,6 +103,7 @@ EOF
     }
 
     stage("Bump image tag in kustomization.yaml & push Git") {
+      when { expression { return env.SKIP_BUILD != "true" } }
       steps {
         container('tools') {
           withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
@@ -114,7 +117,8 @@ EOF
               ORIGIN_URL=$(git remote get-url origin)
               case "$ORIGIN_URL" in
                 https://*)
-                  git remote set-url origin "https://${GITHUB_TOKEN}@${ORIGIN_URL#https://}"
+                  # dùng x-access-token để auth ổn định
+                  git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@${ORIGIN_URL#https://}"
                   ;;
               esac
 
@@ -145,6 +149,13 @@ EOF
   post {
     success {
       echo "OK: pushed ${IMAGE_REPO}:${IMAGE_TAG} + updated ${KUSTOM_FILE}. ArgoCD autosync sẽ rollout."
+    }
+    always {
+      script {
+        if (env.SKIP_BUILD == "true") {
+          echo "Build was skipped by anti-loop logic."
+        }
+      }
     }
   }
 }
